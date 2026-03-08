@@ -243,8 +243,8 @@ namespace Oxide.Plugins
             if (oven == null || oven.IsDestroyed) return;
 
             float interval = Mathf.Max(0.01f, DefaultCookInterval / multiplier);
-            oven.CancelInvoke("Cook");
-            oven.InvokeRepeating("Cook", interval, interval);
+            oven.CancelInvoke((Action)oven.Cook);
+            oven.InvokeRepeating((Action)oven.Cook, interval, interval);
         }
 
         /// <summary>
@@ -254,8 +254,8 @@ namespace Oxide.Plugins
         {
             if (oven == null || oven.IsDestroyed) return;
 
-            oven.CancelInvoke("Cook");
-            oven.InvokeRepeating("Cook", DefaultCookInterval, DefaultCookInterval);
+            oven.CancelInvoke((Action)oven.Cook);
+            oven.InvokeRepeating((Action)oven.Cook, DefaultCookInterval, DefaultCookInterval);
         }
 
         /// <summary>Returns the <see cref="OvenType"/> for <paramref name="oven"/>, or

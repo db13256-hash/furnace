@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -18,10 +17,11 @@ namespace Oxide.Plugins
         // Permission required to run admin chat commands
         private const string AdminPermission = "furnacespeed.admin";
 
-        // Reflected reference to BaseOven.Cook (protected method).
-        // Cached once so every ApplySpeed/RestoreDefaultSpeed call avoids repeated reflection.
-        private static readonly MethodInfo CookMethod =
-            typeof(BaseOven).GetMethod("Cook", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        // The name of the MonoBehaviour method that BaseOven.StartCooking() schedules via
+        // InvokeRepeating.  String-based CancelInvoke/InvokeRepeating dispatch by method name,
+        // so they match the registration made by StartCooking and avoid any delegate-signature
+        // issues (e.g. if Cook has parameters in the current Rust build).
+        private const string CookMethodName = "Cook";
 
         // Exact short prefab names used to identify each oven type.
         // Matching is done with string.Equals (case-insensitive exact match), so "furnace"
@@ -119,14 +119,6 @@ namespace Oxide.Plugins
         private void Init()
         {
             permission.RegisterPermission(AdminPermission, this);
-
-            if (CookMethod == null)
-            {
-                PrintError("Unable to locate BaseOven.Cook via reflection — the plugin will not function. " +
-                           "This may indicate a Rust update changed the method name.");
-                Unsubscribe(nameof(OnOvenToggle));
-                Unsubscribe(nameof(OnEntitySpawned));
-            }
         }
 
         private void OnServerInitialized()
@@ -257,11 +249,8 @@ namespace Oxide.Plugins
             if (oven == null || oven.IsDestroyed) return;
 
             float interval = Mathf.Max(0.01f, DefaultCookInterval / multiplier);
-            // Delegate.CreateDelegate is called only when an oven is toggled (not per cook tick),
-            // so the per-call cost is negligible — no per-oven caching is needed.
-            var cook = (Action)Delegate.CreateDelegate(typeof(Action), oven, CookMethod);
-            oven.CancelInvoke(cook);
-            oven.InvokeRepeating(cook, interval, interval);
+            oven.CancelInvoke(CookMethodName);
+            oven.InvokeRepeating(CookMethodName, interval, interval);
         }
 
         /// <summary>
@@ -271,10 +260,8 @@ namespace Oxide.Plugins
         {
             if (oven == null || oven.IsDestroyed) return;
 
-            // See comment in ApplySpeed — per-call delegate creation cost is negligible here.
-            var cook = (Action)Delegate.CreateDelegate(typeof(Action), oven, CookMethod);
-            oven.CancelInvoke(cook);
-            oven.InvokeRepeating(cook, DefaultCookInterval, DefaultCookInterval);
+            oven.CancelInvoke(CookMethodName);
+            oven.InvokeRepeating(CookMethodName, DefaultCookInterval, DefaultCookInterval);
         }
 
         /// <summary>Returns the <see cref="OvenType"/> for <paramref name="oven"/>, or
